@@ -3745,7 +3745,8 @@ M
 
 ### 目标
 后台任务 `dedupe`：
-- **完全重复**：同一个 sha256 的计入张数的图片 ≥ 2 张 → `kind: 'exact'`，similarity 1
+- **完全重复**：同一个 sha256 的计入张数的图片 ≥ 2 张 → `kind: 'exact'`，similarity 1。例外（2026-11-28）：都是同一个 Pixiv 作品的原图名、页码各不相同
+  （作品里重复的空白页、封面）不算重复，按页分开、同一页存了几份的照样报（`DedupeService.ts` 的 `pagesOfOneWork`）
 - **相似**：64 位 dHash（T04 已经算好）汉明距离 ≤ 阈值（`settings.dedupe.hammingThreshold`，默认 8，实际生效值限制在 0..16），用并查集连成组 → `kind: 'similar'`，similarity = 1 − 组内最大两两距离 / 64
 - 和已有的组对账：已忽略、已处理的不重复报；过时的未处理组删掉
 - 实现 `listDuplicates`、`resolveDuplicate`（保留选中的，其余移到回收站）、`ignoreDuplicate`

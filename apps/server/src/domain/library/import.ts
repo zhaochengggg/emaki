@@ -14,7 +14,7 @@ import { isImageFile, isoFromMs, toAbs } from '../../services/fs/paths.ts';
 import { probeImage } from '../../services/image/probe.ts';
 import { htmlAnimationCache } from '../../services/image/htmlAnimation.ts';
 import { ComicAreas } from '../../services/classify/comicAreas.ts';
-import { parseSource } from '../../services/source/parseSource.ts';
+import { otherPixivPage, parseSource } from '../../services/source/parseSource.ts';
 import { assertRecyclable } from '../../services/trash/driveType.ts';
 import { moveToRecycleBin, type TrashImpl } from '../../services/trash/recycleBin.ts';
 import type { SqliteContext } from '../../datasource/sqlite/context.ts';
@@ -104,7 +104,9 @@ export async function importImages(ctx: SqliteContext, body: ImportImagesBody, o
       const { root, abs: folder } = destination(ctx, body.rootId, dir);
       const duplicates = ctx.db.prepare(`SELECT i.id,i.rel_path,r.path FROM images i JOIN library_roots r ON r.id=i.root_id
         WHERE i.sha256=? AND ${VISIBLE} ORDER BY i.id`).all(sha) as { id: number; rel_path: string; path: string }[];
+      // 同一个 Pixiv 作品里内容完全相同的另一页（重复的空白页、封面）不算已经有了：照常放进来，作品的页才齐
       const existing = duplicates.find(r => {
+        if (otherPixivPage(name, r.rel_path)) return false;
         try { const f=toAbs(r.path,r.rel_path); return statSync(f).size === bytes.length && sha256Buffer(readFileSync(f)) === sha; }
         catch { return false; }
       });

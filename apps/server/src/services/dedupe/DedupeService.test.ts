@@ -41,6 +41,17 @@ describe('buildGroups', () => {
     });
     expect(result.groups.map((g) => g.memberIds)).toEqual([[a.id, b.id]]);
   });
+  it('同一个 Pixiv 作品里内容完全相同的几页（原图名页码不同）不算重复；同一页存了几份照样报；有别的命名就照旧整组报', () => {
+    const D = 'aaaaaaaa55555555';
+    const pages = [row({ sha256: 'blank', dhash: D, file_name: '6006_p3.jpg' }), row({ sha256: 'blank', dhash: D, file_name: '6006_p7.jpg' })];
+    expect(buildGroups(pages, 8).groups).toEqual([]);
+    const copy = row({ sha256: 'blank', dhash: D, file_name: '6006_p7 (1).jpg' });
+    expect(buildGroups([...pages, copy], 8).groups.map((g) => [g.kind, g.memberIds])).toEqual([['exact', [pages[1]!.id, copy.id]]]);
+    const other = row({ sha256: 'blank', dhash: D, file_name: 'Artist - Title (6006) p7.jpg' });
+    expect(buildGroups([...pages, other], 8).groups.map((g) => g.memberIds)).toEqual([[pages[0]!.id, pages[1]!.id, other.id]]);
+    const otherWork = row({ sha256: 'blank', dhash: D, file_name: '7007_p0.jpg' });
+    expect(buildGroups([...pages, otherWork], 8).groups.map((g) => g.memberIds)).toEqual([[pages[0]!.id, pages[1]!.id, otherWork.id]]);
+  });
   it('同 sha → exact；dHash 接近 → similar，similarity 取最大两两距离', () => {
     const a = row({ sha256: 'x', dhash: H });
     const b = row({ sha256: 'x', dhash: H, file_name: 'a - 副本.png' });

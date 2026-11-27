@@ -58,6 +58,23 @@ it('exact duplicates reuse IDs; different contents with the same name require a 
   expect(await readFile(path.join(lib,'image.png'))).toEqual(image);
 });
 
+it('同一个 Pixiv 作品里内容完全相同的另一页照常放进来；同一页再下、别的作品里的同一张、认不出页码的照旧算已经有了',async()=>{
+  const p3=item(await run([{path:await source('6006_p3.png')}],'Pixiv'));
+  expect(p3.status).toBe('imported');
+  // 作品里第 7 页和第 3 页一模一样（重复的空白页）：是另一页，放进来
+  const p7=item(await run([{path:await source('6006_p7.png')}],'Pixiv'));
+  expect(p7.status).toBe('imported');expect(p7.imageId).not.toBe(p3.imageId);
+  expect(await readdir(path.join(lib,'Pixiv'))).toEqual(['6006_p3.png','6006_p7.png']);
+  // 整个作品再下一遍：两页都已经有了
+  const again=await run([{path:await source('6006_p3.png')},{path:await source('6006_p7.png')}],'Pixiv');
+  expect(again.items.map(i=>i.status)).toEqual(['existing','existing']);
+  expect(again.items.map(i=>i.status!=='failed' && i.imageId)).toEqual([p3.imageId,p7.imageId]);
+  // 别的作品、别的命名的同一张：已经有了
+  for(const name of ['7007_p0.png','Artist - Title (6006) p9.png','blank.png'])
+    expect((await run([{path:await source(name)}],'Pixiv')).items[0]!.status).toBe('existing');
+  expect(await readdir(path.join(lib,'Pixiv'))).toEqual(['6006_p3.png','6006_p7.png']);
+});
+
 it('asks about unindexed same-name files and reports per-file validation failures',async()=>{
   await writeFile(path.join(lib,'image.png'),'keep-me');
   const good=await source(),bad=await source('page.jpg',Buffer.from('<html>not an image</html>'));

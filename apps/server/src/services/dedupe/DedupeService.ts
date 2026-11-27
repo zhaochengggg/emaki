@@ -9,6 +9,7 @@ import { pickKeep, type KeepCandidate } from './pickKeep.ts';
 import { UnionFind } from './unionFind.ts';
 import { setImmediate } from 'node:timers/promises';
 import { toAbs } from '../fs/paths.ts';
+import { pixivPageOf } from '../source/parseSource.ts';
 import { compareImages, compatibleDecision, COMPATIBLE_PIXEL_VERSION, COMPARISON_VERSION, type ImageComparison } from './compareImages.ts';
 import { ComparisonWorker, ComparisonWorkerError } from './ComparisonWorker.ts';
 
@@ -138,6 +139,17 @@ export function groupCandidates({ buckets, reps, pairs, missingHash }: Candidate
   for (const ks of comps.values()) {
     const members = ks.flatMap((k) => buckets[k]!);
     if (members.length < 2) continue;
+    // 完全相同的文件，但都是同一个 Pixiv 作品的原图、页码各不相同：作品里本来就有几页一样（重复的空白页、封面），不是重复；
+    // 同一页存了几份的照样报
+    if (ks.length === 1) {
+      const pages = pagesOfOneWork(members);
+      if (pages) {
+        for (const same of pages)
+          if (same.length > 1)
+            groups.push({ kind: 'exact', similarity: 1, memberIds: same.map((m) => m.id).sort((a, b) => a - b), suggestedKeepId: pickKeep(same).id });
+        continue;
+      }
+    }
     // 相似簇太大多半是截图、纯色图串成的链；完全相同的文件（ks 只有一个桶）再多也照样上报
     if (ks.length > 1 && members.length > MAX_COMPONENT) {
       droppedLarge++;
@@ -168,6 +180,21 @@ export function groupCandidates({ buckets, reps, pairs, missingHash }: Candidate
     });
   }
   return { groups, droppedLarge, missingHash, representatives: reps.length };
+}
+
+/** 都是同一个 Pixiv 作品的原图名（<投稿号>_p<页>）：按页分开；有一个不是、或者不是同一个作品，返回 null（照旧整组算） */
+function pagesOfOneWork(members: DedupeRow[]): DedupeRow[][] | null {
+  const byPage = new Map<number, DedupeRow[]>();
+  let post: string | undefined;
+  for (const m of members) {
+    const p = pixivPageOf(m.file_name);
+    if (!p || (post !== undefined && p.postId !== post)) return null;
+    post = p.postId;
+    const list = byPage.get(p.page);
+    if (list) list.push(m);
+    else byPage.set(p.page, [m]);
+  }
+  return [...byPage.values()];
 }
 
 export interface ReconcileResult {

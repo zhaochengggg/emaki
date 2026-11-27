@@ -44,6 +44,29 @@ const BOORU_URL: Record<string, string> = {
 
 const withArtist = (artist: string | undefined) => (artist ? { artist } : {});
 
+// Pixiv 原图名里的页码：<投稿号>_p<页>（也认 <投稿号>-<哈希>_p<页>），从 0 开始，和 Pixiv 一致
+const PIXIV_PAGE = /(?<![\da-f])(\d{4,10})(?:-[0-9a-f]{32})?_p(\d{1,4})(?!\d)/i;
+
+/**
+ * 文件名是 Pixiv 原图名时，是哪个投稿的第几页（「12345_p3.jpg」→ { postId: '12345', page: 3 }）；别的命名不认（null）。
+ * 「作者 - 标题 (投稿号) p页码」这类下载器的页码从 0 还是 1 数不一定，不拿来比
+ */
+export function pixivPageOf(relPath: string): { postId: string; page: number } | null {
+  const stem = relPath.split('/').at(-1)!.replace(EXT, '').replace(COPY_SUFFIX, '');
+  const m = PIXIV_PAGE.exec(stem);
+  return m ? { postId: m[1]!, page: Number(m[2]) } : null;
+}
+
+/**
+ * 两个文件是同一个 Pixiv 作品的不同页（都是原图名、投稿号一样、页码不一样）。作品里有内容完全相同的几页（重复的空白页、封面）时，
+ * 它们是不同的页，不是重复：导入不跳过（domain/library/import.ts），「重复」不报（services/dedupe/），「已下载」各算一张（queries/pixivPosts.ts）
+ */
+export function otherPixivPage(a: string, b: string): boolean {
+  const x = pixivPageOf(a);
+  const y = pixivPageOf(b);
+  return !!x && !!y && x.postId === y.postId && x.page !== y.page;
+}
+
 /** relPath 用正斜杠，包含目录（目录名是作者名的线索） */
 export function parseSource(relPath: string, pixivFilenameMode: Settings['tagger']['pixivFilenameMode'] = 'strict'): ImageSource | null {
   const parts = relPath.split('/');

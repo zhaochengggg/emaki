@@ -31,6 +31,17 @@ afterEach(async () => {
   await ds.close();
 });
 
+it('作品里本来就有几页一模一样（重复的空白页）：按原图名的页码各算一张；同一页的副本、别的命名的同一张不多算', async () => {
+  const add = ds.ctx.db.prepare(`INSERT INTO images (root_id, rel_path, file_name, width, height, bytes, format, sha256, added_at, modified_at, source_site, source_post_id)
+    VALUES (1, ?, ?, 1, 1, 1, 'png', ?, 'x', 'x', 'pixiv', '6006')`);
+  add.run('a/6006_p0.png', '6006_p0.png', 'blank');
+  add.run('a/6006_p1.png', '6006_p1.png', 'blank');
+  add.run('a/6006_p1 (1).png', '6006_p1 (1).png', 'blank');
+  add.run('b/Artist - Title (6006) p1.png', 'Artist - Title (6006) p1.png', 'blank');
+  add.run('a/6006_p2.png', '6006_p2.png', 'cover');
+  expect((await ds.registry.query<{ posts: Record<string, { images: number }> }>('images.pixivPosts', { ids: ['6006'] })).posts['6006']!.images).toBe(3);
+});
+
 it('这些 Pixiv 作品在图库里各有几张（不同内容的）、几张动图、一共几页（缓存过的）；回收站里的、不在了的、停用的文件夹里的不算', async () => {
   const r = await ds.registry.query<{ posts: Record<string, unknown> }>('images.pixivPosts', { ids: ['1001', '2002', '3003', '4004', '5005'] });
   expect(r.posts).toEqual({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSource } from './parseSource.ts';
+import { otherPixivPage, parseSource, pixivPageOf } from './parseSource.ts';
 
 const MD5 = '0123456789abcdef0123456789abcdef';
 const pixiv = (postId: string, artist?: string) => ({
@@ -125,5 +125,25 @@ describe('parseSource', () => {
     `98765432-${MD5}_p0.png`, 'illust_98765432_20240101.jpg',
   ])('strict mode retains distinctive Pixiv filename %s', (name) => {
     expect(parseSource(name)).toEqual(pixiv('98765432'));
+  });
+});
+
+describe('Pixiv 原图名的页码', () => {
+  it.each([
+    ['pixiv/123456789_p0.png', { postId: '123456789', page: 0 }],
+    ['123456789_p12 (1).jpg', { postId: '123456789', page: 12 }],
+    [`123456789-${MD5}_p3.jpg`, { postId: '123456789', page: 3 }],
+    ['Artist - Title (123456789) p3.jpg', null],
+    ['123456789_title_3.jpg', null],
+    ['123456789_ugoira0.jpg', null],
+  ])('%s', (name, expected) => {
+    expect(pixivPageOf(name)).toEqual(expected);
+  });
+
+  it('同一个作品的不同页才算「另一页」', () => {
+    expect(otherPixivPage('a/1234_p0.png', 'b/1234_p1.jpg')).toBe(true);
+    expect(otherPixivPage('1234_p1.png', '1234_p1 (1).png')).toBe(false);
+    expect(otherPixivPage('1234_p0.png', '5678_p1.png')).toBe(false);
+    expect(otherPixivPage('1234_p0.png', 'Artist - Title (1234) p1.png')).toBe(false);
   });
 });
